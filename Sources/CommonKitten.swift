@@ -1,5 +1,15 @@
 import Foundation
 
+
+public func fromBytes<T, S : Collection>(_ bytes: S) throws -> T where S.Iterator.Element == UInt8, S.IndexDistance == Int {
+    guard bytes.count >= MemoryLayout<T>.size else {
+        throw DeserializationError.InvalidElementSize
+    }
+    
+    return UnsafeRawPointer([UInt8](bytes)).assumingMemoryBound(to: T.self).pointee
+}
+
+
 public enum InstantiationError : Error {
     case notEnoughData
 }
@@ -9,7 +19,7 @@ public enum DeserializationError : Error {
     /// The instantiating went wrong because the element has an invalid size
     case InvalidElementSize
     
-    /// The contents of the BSON binary data was invalid
+    /// The contents of the binary data was invalid
     case InvalidElementContents
     
     /// The lsat element of the Binary Array was invalid
@@ -22,29 +32,27 @@ public enum DeserializationError : Error {
     case InvalidOperation
 }
 
-extension Integer {
-    /// The amount of bytes in one of `Self`
-    public static var size: Int {
-        return sizeof(Self.self)
-    }
-    
+public protocol CommonBytesProtocol {}
+extension Int : CommonBytesProtocol {}
+extension Int64 : CommonBytesProtocol {}
+extension Int32 : CommonBytesProtocol {}
+extension Int16 : CommonBytesProtocol {}
+extension Int8 : CommonBytesProtocol {}
+extension UInt : CommonBytesProtocol {}
+extension UInt64 : CommonBytesProtocol {}
+extension UInt32 : CommonBytesProtocol {}
+extension UInt16 : CommonBytesProtocol {}
+extension UInt8 : CommonBytesProtocol {}
+extension Double : CommonBytesProtocol {}
+extension CommonBytesProtocol {
     /// The bytes in `Self`
     public var bytes : [UInt8] {
         var integer = self
-        return withUnsafePointer(&integer) {
-            Array(UnsafeBufferPointer(start: UnsafePointer<UInt8>($0), count: Self.size))
+        return withUnsafePointer(to: &integer) {
+            $0.withMemoryRebound(to: UInt8.self, capacity: MemoryLayout<Self>.size) {
+                Array(UnsafeBufferPointer(start: $0, count: MemoryLayout<Self>.size))
+            }
         }
-    }
-    
-    /// Creates a `Self` from bytes
-    ///
-    /// - throws: InstantiationError.notEnoughData
-    public static func instantiate(bytes data: [UInt8]) throws -> Self {
-        guard data.count >= self.size else {
-            throw InstantiationError.notEnoughData
-        }
-        
-        return UnsafePointer<Self>(data).pointee
     }
 }
 
@@ -78,7 +86,7 @@ public extension String {
         }
         
         // Get the length
-        let length = try Int32.instantiate(bytes: Array(data[0...3]))
+        let length: Int32 = try fromBytes(data[0...3])
         
         // Check if the data is at least the right size
         guard data.count >= Int(length) + 4 else {

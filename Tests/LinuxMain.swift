@@ -1,5 +1,5 @@
 import XCTest
-@testable import CommonKittenTestSuite
+@testable import CommonKittenTests
 
 XCTMain([
      testCase(CommonKittenTests.allTests),
